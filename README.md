@@ -1,5 +1,5 @@
 # Cloud Computing Laboratory
 
-Student Name:
-Student ID:
-Class:
+Student Name:Võ Thị Ngọc Ý
+Student ID: 237258
+Class: Dh23TIN09
