@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Danh sách sinh viên</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            background: white;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #333;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Danh sách sinh viên</h1>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Mã sinh viên</th>
+                <th>Họ tên</th>
+                <th>Email</th>
+            </tr>
+        </thead>
+
+        <tbody id="studentList">
+            <tr>
+                <td colspan="3">Đang tải dữ liệu...</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        fetch("/api/students")
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Không thể lấy dữ liệu");
+                }
+
+                return response.json();
+            })
+            .then(students => {
+                const studentList =
+                    document.getElementById("studentList");
+
+                studentList.innerHTML = "";
+
+                students.forEach(student => {
+                    const row = document.createElement("tr");
+
+                    row.innerHTML = `
+                        <td>${student.studentId}</td>
+                        <td>${student.name}</td>
+                        <td>${student.email}</td>
+                    `;
+
+                    studentList.appendChild(row);
+                });
+            })
+            .catch(error => {
+                console.error(error);
+
+                document.getElementById("studentList").innerHTML = `
+                    <tr>
+                        <td colspan="3">
+                            Lỗi khi tải danh sách sinh viên
+                        </td>
+                    </tr>
+                `;
+            });
+    </script>
+
+</body>
+</html>
