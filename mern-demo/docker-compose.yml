@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  # Câu 81 & 83: Khai báo service backend và ánh xạ Port 5000
+  backend:
+    build: ./server
+    ports:
+      - "5000:5000" # ánh xạ Port 5000
+    container_name: mern-backend
+    #  Câu 85
+    environment:
+      MONGODB_URI: mongodb+srv://NgocY:vothingocy2005@cluster0.jhgqz4u.mongodb.net/cloud_lab?appName=Cluster0
+  # Câu 82 & 84: Khai báo service frontend và Ánh xạ Port 3000
+  frontend:
+    build: ./client
+    ports:
+      - "3000:3000" # Ánh xạ Port 3000 máy host S
+    container_name: mern-frontendD 

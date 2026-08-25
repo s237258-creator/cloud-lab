@@ -1,148 +1,171 @@
-import React, { useState, useEffect } from 'react';
-import './App.css'; 
+import { useCallback, useEffect, useState } from 'react';
+import './App.css';
+
+// Khai báo đường dẫn Backend trực tiếp cổng 5000
+const API_BASE_URL = 'http://localhost:5000';
+
+const parseResponse = async (response) => {
+  const body = await response.text();
+  if (!body) return {};
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error(`API trả về dữ liệu không hợp lệ (${response.status}).`);
+  }
+};
 
 function App() {
+  const [formData, setFormData] = useState({ studentId: '', name: '', email: '' });
   const [students, setStudents] = useState([]);
-  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const [studentId, setStudentId] = useState("");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  
-  // --- HÀM LẤY DANH SÁCH (GET) ---
-  const fetchStudents = async () => {
+  const handleChange = (e) => {
+    setFormData((current) => ({ ...current, [e.target.name]: e.target.value }));
+  };
+
+  const fetchStudents = useCallback(async () => {
+    const response = await fetch(`${API_BASE_URL}/api/students`);
+    const result = await parseResponse(response);
+    if (!response.ok) throw new Error(result.error || result.message || 'Không thể tải danh sách sinh viên.');
+    return Array.isArray(result) ? result : [];
+  }, []);
+
+  const loadStudents = async () => {
+    setLoading(true);
     try {
-      setError("");
-      const response = await fetch("/api/students"); 
-      
-      if (!response.ok) {
-        throw new Error("Không thể lấy danh sách sinh viên");
-      }
-      
-      const data = await response.json();
-      setStudents(data);
-    } catch (err) {
-      setError("Lỗi khi tải danh sách sinh viên: " + err.message);
+      setStudents(await fetchStudents());
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStudents();
-  }, []);
-
-  // --- HÀM THÊM SINH VIÊN (POST) ---
-  const handleSubmit = async (e) => {
-    e.preventDefault(); 
-    
-    const newStudent = { studentId, name, email };
-
-    try {
-      // ĐÃ SỬA LẠI THÀNH ĐƯỜNG DẪN TƯƠNG ĐỐI "/api/students"
-      const response = await fetch("/api/students", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newStudent),
+    let cancelled = false;
+    fetchStudents()
+      .then((data) => {
+        if (!cancelled) {
+          setStudents(data);
+          setError('');
+        }
+      })
+      .catch((requestError) => {
+        if (!cancelled) setError(requestError.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
-      if (response.ok) {
-        alert("Thêm sinh viên thành công!");
-        setStudentId("");
-        setName("");
-        setEmail("");
-        
-        // CÂU LỆNH LOAD LẠI DỮ LIỆU SAU KHI THÊM
-        fetchStudents(); 
-      } else {
-        alert("Thêm sinh viên thất bại!");
-      }
-    } catch (err) {
-      console.error("Lỗi khi gửi dữ liệu: ", err);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchStudents]);
+
+  const resetForm = () => {
+    setFormData({ studentId: '', name: '', email: '' });
+    setEditingId(null);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const endpoint = editingId 
+        ? `${API_BASE_URL}/api/students/${editingId}` 
+        : `${API_BASE_URL}/api/students`;
+      const response = await fetch(endpoint, {
+        method: editingId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const result = await parseResponse(response);
+      if (!response.ok) throw new Error(result.error || result.message || 'Có lỗi xảy ra.');
+      resetForm();
+      await loadStudents();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // --- HÀM XÓA SINH VIÊN (DELETE) ---
-  const handleDelete = async (id) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa sinh viên này?")) {
-      try {
-        const response = await fetch(`/api/students/${id}`, {
-          method: "DELETE"
-        });
+  const handleEdit = (student) => {
+    setEditingId(student._id);
+    setFormData({ studentId: student.studentId, name: student.name, email: student.email });
+    setError('');
+  };
 
-        if (response.ok) {
-          alert("Xóa thành công!");
-          
-          // CÂU LỆNH LOAD LẠI DỮ LIỆU SAU KHI XÓA
-          fetchStudents(); 
-        } else {
-          alert("Xóa thất bại!");
-        }
-      } catch (err) {
-        console.error("Lỗi khi xóa: ", err);
-      }
+  const handleDelete = async (id) => {
+    if (!window.confirm('Bạn có chắc muốn xóa sinh viên này?')) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/students/${id}`, { method: 'DELETE' });
+      const result = await parseResponse(response);
+      if (!response.ok) throw new Error(result.message || 'Không thể xóa sinh viên.');
+      setStudents((current) => current.filter((student) => student._id !== id));
+      if (editingId === id) resetForm();
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
     }
   };
 
   return (
-    <div className="App">
-      <h2>Danh sách sinh viên</h2>
-      
-      {error ? (
-        <p style={{ color: "red" }}>{error}</p>
-      ) : (
-        <table border="1" cellPadding="10" style={{ width: "100%", textAlign: "left" }}>
-          <thead>
-            <tr>
-              <th>Mã sinh viên</th>
-              <th>Họ tên</th>
-              <th>Email</th>
-              <th>Hành động</th> {/* Thêm cột Hành động */}
-            </tr>
-          </thead>
-          <tbody>
-            {students.length > 0 ? (
-              students.map((student) => (
-                <tr key={student._id}>
-                  <td>{student.studentId}</td>
-                  <td>{student.name}</td>
-                  <td>{student.email}</td>
-                  <td>
-                    {/* Nút Xóa gọi hàm handleDelete và truyền _id của sinh viên */}
-                    <button onClick={() => handleDelete(student._id)} style={{ color: "white", backgroundColor: "red" }}>
-                      Xóa
-                    </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="4" style={{ textAlign: "center" }}>Chưa có dữ liệu sinh viên</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+    <main className="container">
+      <header className="page-header">
+        <h1>Quản lý sinh viên</h1>
+      </header>
 
-      <hr />
+      <section className="panel">
+        <div className="section-heading">
+          <h2>{editingId ? 'Chỉnh sửa sinh viên' : 'Thêm sinh viên'}</h2>
+          {editingId && <button className="button button-quiet" type="button" onClick={resetForm}>Hủy</button>}
+        </div>
+        <form className="student-form" onSubmit={handleSubmit}>
+          <label>MSSV<input name="studentId" value={formData.studentId} onChange={handleChange} placeholder="VD: SV001" required /></label>
+          <label>Họ tên<input name="name" value={formData.name} onChange={handleChange} placeholder="Nguyễn Văn A" required /></label>
+          <label>Email<input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="sinhvien@example.com" required /></label>
+          <button className="button button-primary" type="submit" disabled={submitting}>{submitting ? 'Đang lưu...' : editingId ? 'Lưu thay đổi' : 'Thêm sinh viên'}</button>
+        </form>
+      </section>
 
-      <h2>Thêm Sinh viên mới</h2>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: "10px" }}>
-          <label>MSSV: </label>
-          <input type="text" value={studentId} onChange={(e) => setStudentId(e.target.value)} required />
+      {error && <p className="message error" role="alert">{error}</p>}
+
+      <section className="student-section">
+        <div className="section-heading">
+          <h2>Danh sách sinh viên</h2>
         </div>
-        <div style={{ marginBottom: "10px" }}>
-          <label>Họ tên: </label>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required />
-        </div>
-        <div style={{ marginBottom: "10px" }}>
-          <label>Email: </label>
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </div>
-        <button type="submit" style={{ backgroundColor: "green", color: "white" }}>Thêm sinh viên</button>
-      </form>
-    </div>
+
+        {loading ? (
+          <p className="message">Đang tải dữ liệu...</p>
+        ) : students.length === 0 ? (
+          <p className="message">Chưa có sinh viên nào.</p>
+        ) : (
+          <div className="student-list">
+            {students.map((student) => (
+              <article className="student-item" key={student._id}>
+                <div className="student-info">
+                  <strong>{student.name}</strong>
+                  <span>MSSV: {student.studentId}</span>
+                  <span>Email: {student.email}</span>
+                </div>
+                <div className="actions">
+                  <button className="button button-quiet" type="button" onClick={() => handleEdit(student)}>Sửa</button>
+                  <button className="button button-danger" type="button" onClick={() => handleDelete(student._id)}>Xóa</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    </main>
   );
 }
 
