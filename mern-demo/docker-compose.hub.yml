@@ -1,0 +1,14 @@
+services:
+  backend:
+    image: ngocyit/mern-backend:1.0
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+
+  frontend:
+    image: ngocyit/mern-frontend:1.0
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
